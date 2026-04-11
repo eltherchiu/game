@@ -144,13 +144,13 @@ canvas{display:block;width:100%;height:100%;}
 .wBtn.active .wKey{color:#ff6633;}
 
 /* ── SHOPS ── */
-#shopOv,#upOv,#skinOv{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;pointer-events:all;backdrop-filter:blur(4px);}
-.shopCard{background:linear-gradient(145deg,#1a0a2e,#0d1a3a);border:3px solid #7c3aed;padding:24px 28px;width:min(460px,94vw);max-height:83vh;overflow-y:auto;border-radius:14px;box-shadow:0 0 60px #7c3aed66,0 0 20px #4f46e544,inset 0 1px 0 #a78bfa44;}
+#shopOv,#upOv,#skinOv{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:9999;pointer-events:all;touch-action:manipulation;backdrop-filter:blur(4px);}
+.shopCard{background:linear-gradient(145deg,#1a0a2e,#0d1a3a);border:3px solid #7c3aed;padding:24px 28px;width:min(460px,94vw);max-height:83vh;overflow-y:auto;border-radius:14px;box-shadow:0 0 60px #7c3aed66,0 0 20px #4f46e544,inset 0 1px 0 #a78bfa44;pointer-events:all;touch-action:manipulation;}
 .shopCard::-webkit-scrollbar{width:5px;}
 .shopCard::-webkit-scrollbar-track{background:#1a0a2e;}
 .shopCard::-webkit-scrollbar-thumb{background:#7c3aed;border-radius:3px;}
 .shopCard h2{font-family:'Bangers',cursive;color:#a78bfa;font-size:1.8rem;letter-spacing:.15em;margin-bottom:18px;text-shadow:0 0 20px #7c3aed;}
-.sItem{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1.5px solid #4f46e533;margin-bottom:6px;cursor:pointer;transition:all .15s;border-radius:8px;background:rgba(99,102,241,.07);}
+.sItem{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1.5px solid #4f46e533;margin-bottom:6px;cursor:pointer;transition:all .15s;border-radius:8px;background:rgba(99,102,241,.07);touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,255,255,0.05);}
 .sItem:hover:not(.ca):not(.own){background:rgba(124,58,237,.18);border-color:#7c3aed;transform:translateX(3px);box-shadow:0 0 12px #7c3aed44;}
 .sItem.own{border-color:#10b98155;background:rgba(16,185,129,.1);}
 .sItem.ca{opacity:.38;cursor:default;}
@@ -166,7 +166,7 @@ canvas{display:block;width:100%;height:100%;}
 #skinGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:60vh;overflow-y:auto;padding-right:4px;}
 #skinGrid::-webkit-scrollbar{width:4px;}
 #skinGrid::-webkit-scrollbar-thumb{background:#9b59b6;border-radius:2px;}
-.skinCard{border:2px solid #9b59b622;border-radius:10px;padding:10px;cursor:pointer;transition:all .15s;background:rgba(155,89,182,.06);display:flex;align-items:center;gap:10px;}
+.skinCard{border:2px solid #9b59b622;border-radius:10px;padding:10px;cursor:pointer;transition:all .15s;background:rgba(155,89,182,.06);display:flex;align-items:center;gap:10px;touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,255,255,0.05);}
 .skinCard:hover:not(.skinOwned):not(.skinCantAfford){background:rgba(155,89,182,.18);border-color:#9b59b6;transform:scale(1.02);}
 .skinCard.skinEquipped{border-color:#f1c40f;background:rgba(241,196,15,.1);box-shadow:0 0 12px #f1c40f44;}
 .skinCard.skinOwned:not(.skinEquipped){border-color:#2ecc7144;background:rgba(46,204,113,.07);}
@@ -1445,7 +1445,7 @@ function offerAbilities(){
       <div style="font-family:'Rajdhani',sans-serif;font-size:.75rem;color:#ccc;line-height:1.4;">${ab.desc[nextLvl-1]}</div>
     `;
 
-    card.ondblclick=()=>pickAbility(ab.id);
+    card.onclick=()=>pickAbility(ab.id);card.style.touchAction="manipulation";
     cards.appendChild(card);
   });
 
@@ -1904,33 +1904,79 @@ function retreatToSafeZone(){
 setInterval(()=>{ if(G&&G.players&&G.players.length) saveGame(); },3000);
 window.addEventListener('load',showMenuSaveInfo);
 
-// ── iOS TOUCH FIX ────────────────────────────────────────────
-// On iOS, elements inside pointer-events:none parents can't receive touches
-// even if they have pointer-events:all. Fix by forcing the menu outside that context.
+// ── UNIVERSAL iOS TOUCH FIX ───────────────────────────────────
+// iOS Safari ignores pointer-events:all on children of pointer-events:none parents.
+// Solution: move every interactive overlay to document.body at load time,
+// and add touchend->click fallback to every button/interactive element.
 window.addEventListener('load',()=>{
-  // Move #menu to be a direct child of body so iOS doesn't block it
-  const menu=document.getElementById('menu');
-  const mpOv=document.getElementById('mpOv');
-  const cheatOv=document.getElementById('cheatOv');
-  if(menu&&menu.parentElement.id!=='body-root'){
-    document.body.appendChild(menu);
-  }
-  if(mpOv&&mpOv.parentElement.id!=='body-root'){
-    document.body.appendChild(mpOv);
-  }
-  if(cheatOv&&cheatOv.parentElement.id!=='body-root'){
-    document.body.appendChild(cheatOv);
-  }
-  // Ensure all mBtn buttons work on iOS (add touchend as click fallback)
-  document.querySelectorAll('.mBtn, #continueBtn').forEach(btn=>{
-    btn.style.cursor='pointer';
-    btn.style.webkitTapHighlightColor='rgba(255,255,255,0.1)';
-    btn.addEventListener('touchend',function(e){
+  // 1. Move all overlays out of #ui to body so pointer-events:none can't block them
+  const toMove=['menu','mpOv','abilityOv','cheatOv','shopOv','upOv','skinOv',
+                'settingsPanel','go','mobileControls'];
+  toMove.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&el.parentElement!==document.body) document.body.appendChild(el);
+  });
+
+  // 2. Add touch-action:manipulation and touchend fallback to ALL buttons/clickables
+  // This eliminates the 300ms tap delay and ensures clicks fire on iOS
+  function fixTouchable(el){
+    if(!el) return;
+    el.style.touchAction='manipulation';
+    el.style.webkitTapHighlightColor='rgba(255,255,255,0.08)';
+    el.style.cursor='pointer';
+    el.addEventListener('touchend',function(e){
       e.preventDefault();
-      // Trigger the onclick
-      if(this.onclick) this.onclick(e);
-      else this.click();
+      e.stopPropagation();
+      // Fire click event so onclick= attributes and .onclick handlers both work
+      this.click();
     },{passive:false});
+  }
+
+  // Fix all current buttons
+  function fixAllButtons(){
+    document.querySelectorAll(
+      'button, .mBtn, .sItem, .skinCard, .cheatWBtn, .cheatABtn, .cheatPreset, '+
+      '.mpDiffBtn, #btnE, #btnShoot, #btnPrevWeapon, #btnNextWeapon, '+
+      '[onclick], [data-clickable]'
+    ).forEach(fixTouchable);
+  }
+  fixAllButtons();
+
+  // 3. Re-fix buttons whenever a shop/overlay opens (dynamic buttons)
+  const shopObserver=new MutationObserver(()=>fixAllButtons());
+  ['shopItems','upItems','skinGrid','cheatPanel','cheatWeaponBtns','cheatAbilityBtns',
+   'cheatUpgradeBtns','abilityCards','mpOv'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) shopObserver.observe(el,{childList:true,subtree:true});
+  });
+
+  // 4. Make sure all overlay containers have correct positioning after move to body
+  const fixedOverlays=['shopOv','upOv','skinOv','mpOv','abilityOv','cheatOv'];
+  fixedOverlays.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){
+      el.style.position='fixed';
+      el.style.zIndex='9999';
+      el.style.pointerEvents='all';
+    }
+  });
+  const settingsPanel=document.getElementById('settingsPanel');
+  if(settingsPanel){
+    settingsPanel.style.position='fixed';
+    settingsPanel.style.zIndex='9998';
+    settingsPanel.style.pointerEvents='all';
+  }
+  const menu=document.getElementById('menu');
+  if(menu){
+    menu.style.position='fixed';
+    menu.style.zIndex='9997';
+    menu.style.pointerEvents='all';
+  }
+
+  // 5. Fix all inputs and textareas for iOS keyboard
+  document.querySelectorAll('input,textarea').forEach(el=>{
+    el.style.fontSize='16px'; // prevents iOS auto-zoom on focus
+    el.style.touchAction='manipulation';
   });
 });
 // Multiple tab-close handlers for maximum browser compatibility
@@ -2110,7 +2156,7 @@ function openShop(){
     const div=document.createElement('div');
     div.className='sItem'+(owned?' own':'')+((!owned&&!afford)?' ca':'');
     div.innerHTML=`<div><div class="sName">${it.l}</div><div class="sDesc">${it.d}</div></div><div class="sPrice">${owned?'✓ OWNED':'💰 '+it.c}</div>`;
-    if(!owned&&afford) div.ondblclick=()=>{G.coins-=it.c;G.owned.push(it.id);playSfx('buy');saveGame();refreshWBar();refreshHUD();openShop();};
+    if(!owned&&afford){div.onclick=()=>{G.coins-=it.c;G.owned.push(it.id);playSfx('buy');saveGame();refreshWBar();refreshHUD();openShop();};div.style.touchAction='manipulation';}
     el.appendChild(div);
   });
   document.getElementById('shopOv').style.display='flex';
@@ -2176,7 +2222,7 @@ function openUpgrade(){
           ${afford?'<span style="color:#f1c40f">💎 '+nextCost+'</span>':'<span style="color:#e74c3c">💎 '+nextCost+'</span><br><span style="font-size:.6rem;color:#888">need '+(nextCost-G.gems)+' more</span>'}
         </div>`;
 
-      if(afford) div.ondblclick=()=>{
+      if(afford){div.onclick=()=>{
         G.gems-=nextCost;
         G[sec.key]++;
         if(!sec.custom){
@@ -2189,7 +2235,7 @@ function openUpgrade(){
           if(sec.key==='pUp'){G.prot+=gain;}
         }
         playSfx('buy');saveGame();refreshHUD();openUpgrade();
-      };
+      };}
       el.appendChild(div);
 
       // Peek at next level cost only
@@ -2254,9 +2300,9 @@ function openSkinShop(){
     if(equipped){
       // Do nothing — already equipped
     } else if(owned){
-      card.ondblclick=()=>{G.equippedSkin=skin.id;saveGame();openSkinShop();};
+      card.onclick=()=>{G.equippedSkin=skin.id;saveGame();openSkinShop();};
     } else if(afford||skin.cost===0){
-      card.ondblclick=()=>{
+      card.onclick=()=>{
         if(skin.cost>0) G.coins-=skin.cost;
         G.ownedSkins.push(skin.id);
         G.equippedSkin=skin.id;
